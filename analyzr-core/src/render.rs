@@ -177,11 +177,16 @@ impl Renderer {
         last_event_time: i64,
         box_height: f64,
     ) -> Result<Svg::Group> {
-        let first_bar = first_event_time - (first_event_time % self.opts.us_per_line as i64);
+        let first_bar = first_event_time - (first_event_time % self.opts.us_per_line as i64) -
+            self.opts.us_per_line as i64;
         let last_bar = last_event_time + (last_event_time % self.opts.us_per_line as i64);
 
         let step = self.opts.us_per_line as usize / self.opts.sublines as usize;
         for x in (first_bar..=last_bar).step_by(step) {
+            if x < first_event_time || x > last_event_time {
+                continue;
+            }
+
             let scaled_x = self.us_to_pixel(x);
 
             let data = Data::new()
