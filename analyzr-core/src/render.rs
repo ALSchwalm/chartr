@@ -7,18 +7,18 @@ use svg::Document;
 
 use crate::event::{ActorId, EventKind, EventStore};
 
-const APPROX_FONT_HEIGHT: usize = 15;
+const APPROX_FONT_HEIGHT: f64 = 15.0;
 
 #[derive(Deserialize, Serialize)]
 struct RenderOpts {
     us_per_line: u64,
     sublines: u32,
     us_per_pixel: u32,
-    pixels_per_actor: u32,
-    actor_margin: u32,
-    actor_name_left_padding: u32,
-    top_margin: u32,
-    side_margin: u32,
+    pixels_per_actor: f64,
+    actor_margin: f64,
+    actor_name_padding: f64,
+    top_margin: f64,
+    side_margin: f64,
     heading: String,
 }
 
@@ -28,11 +28,11 @@ impl Default for RenderOpts {
             us_per_line: Duration::from_secs(1).as_micros() as u64,
             sublines: 10,
             us_per_pixel: 10000,
-            pixels_per_actor: 20,
-            actor_margin: 1,
-            actor_name_left_padding: 5,
-            top_margin: 20,
-            side_margin: 20,
+            pixels_per_actor: 20.0,
+            actor_margin: 0.5,
+            actor_name_padding: 5.0,
+            top_margin: 20.0,
+            side_margin: 20.0,
             heading: "".into(),
         }
     }
@@ -71,17 +71,17 @@ impl Renderer {
         format!("{seconds}.{fac}")
     }
 
-    fn calculate_heading_height(&self) -> i64 {
-        let heading_start = self.opts.top_margin as usize + APPROX_FONT_HEIGHT;
-        let lines = self.opts.heading.lines().count();
+    fn calculate_heading_height(&self) -> f64 {
+        let heading_start = self.opts.top_margin + APPROX_FONT_HEIGHT;
+        let lines = self.opts.heading.lines().count() as f64;
         let heading_end = heading_start + lines * APPROX_FONT_HEIGHT +
             // Skip a couple of "lines" after the text of the heading
-            2 * APPROX_FONT_HEIGHT;
-        heading_end as i64
+            2.0 * APPROX_FONT_HEIGHT;
+        heading_end
     }
 
     fn render_heading(&self, mut output: Document) -> Result<Document> {
-        let mut current_y = self.opts.top_margin as usize + APPROX_FONT_HEIGHT;
+        let mut current_y = self.opts.top_margin + APPROX_FONT_HEIGHT;
         for line in self.opts.heading.lines() {
             let text = Svg::Text::new(line)
                 .set("class", "heading")
@@ -97,8 +97,9 @@ impl Renderer {
     fn render_actor(
         &self,
         mut output: Svg::Group,
-        y: u32,
-        box_width: i64,
+        y: f64,
+        box_width: f64,
+        first_event_pixel: f64,
         events: &EventStore,
         actor: ActorId,
     ) -> Result<Svg::Group> {
@@ -113,7 +114,7 @@ impl Renderer {
             let (start, duration) = match event.kind {
                 EventKind::Span(start, duration) => (start, duration),
                 //TODO: handle instants
-                _ => continue,
+                _ => unimplemented!(),
             };
 
             // Only draw the actor label at the start of the first span
@@ -123,7 +124,7 @@ impl Renderer {
 
             let width = match duration {
                 Some(duration) => self.us_to_pixel(duration as i64),
-                None => box_width as f64 - self.us_to_pixel(start),
+                None => (first_event_pixel + box_width) - self.us_to_pixel(start),
             };
 
             let mut state = Svg::Rectangle::new()
@@ -131,7 +132,7 @@ impl Renderer {
                 .set("width", width)
                 .set(
                     "height",
-                    self.opts.pixels_per_actor - 2 * self.opts.actor_margin,
+                    self.opts.pixels_per_actor - 2.0 * self.opts.actor_margin,
                 )
                 .set("x", self.us_to_pixel(start))
                 .set("y", y + self.opts.actor_margin);
@@ -148,21 +149,77 @@ impl Renderer {
         if let Some(start) = actor_start {
             let actor_name = events.get_actor(&actor);
 
+            let (class, padding) =
+                if self.us_to_pixel(start) < (first_event_pixel + box_width) / 2.0 {
+                    ("left", self.opts.actor_name_padding)
+                } else {
+                    ("right", -self.opts.actor_name_padding)
+                };
+
             let text = Svg::Text::new(actor_name.identity.clone())
-                .set("class", "left")
-                .set(
-                    "x",
-                    self.us_to_pixel(start) + self.opts.actor_name_left_padding as f64,
-                )
+                .set("class", class)
+                .set("x", self.us_to_pixel(start) + padding)
                 // Assume the font is probably about 80% of the line
                 // height.
-                .set("y", y as f32 + self.opts.pixels_per_actor as f32 * 0.8);
+                .set("y", y + self.opts.pixels_per_actor * 0.8);
 
             g = g.add(text);
         }
 
         output = output.add(g);
         Ok(output)
+    }
+
+    fn render_lines(
+        &self,
+        mut g: Svg::Group,
+        first_event_time: i64,
+        last_event_time: i64,
+        box_height: f64,
+    ) -> Result<Svg::Group> {
+        let first_bar = first_event_time - (first_event_time % self.opts.us_per_line as i64);
+        let last_bar = last_event_time + (last_event_time % self.opts.us_per_line as i64);
+
+        let step = self.opts.us_per_line as usize / self.opts.sublines as usize;
+        for x in (first_bar..=last_bar).step_by(step) {
+            let scaled_x = self.us_to_pixel(x);
+
+            let data = Data::new()
+                .move_to((scaled_x, 0))
+                .line_by((0, box_height))
+                .close();
+
+            let mut path = Svg::Path::new().set("d", data);
+
+            if x.unsigned_abs() % self.opts.us_per_line == 0 {
+                let text = Svg::Text::new(self.render_line_time(x))
+                    .set("class", "label")
+                    .set("x", scaled_x)
+                    .set("y", -5);
+                g = g.add(text);
+            } else {
+                path = path.set("class", "subline");
+            }
+
+            g = g.add(path);
+        }
+
+        Ok(g)
+    }
+
+    fn render_css(&self, document: Document) -> Result<Document> {
+        let defs = Svg::Definitions::new().add(Svg::Style::new(
+            "
+        rect.span      { opacity: 0.7; }
+        g.actor:hover rect { opacity: 1.0; }
+        path           { stroke: rgb(64,64,64); stroke-width: 1; }
+        path.subline   { stroke: rgb(224,224,224); stroke-width: 0.7; }
+        text           { font-family: Verdana, Helvetica; font-size: 14px; }
+        text.left      { font-family: Verdana, Helvetica; font-size: 14px; text-anchor: start; }
+        text.right     { font-family: Verdana, Helvetica; font-size: 14px; text-anchor: end; }
+        text.label     { font-size: 10px; }",
+        ));
+        Ok(document.add(defs))
     }
 
     pub fn render(&self, path: impl AsRef<Path>, events: EventStore) -> Result<()> {
@@ -196,76 +253,43 @@ impl Renderer {
         let heading_height = self.calculate_heading_height();
 
         // TODO: consider heading width may be greater than box width
-        let box_width = (last_event_time - first_event_time) / self.opts.us_per_pixel as i64;
-        let box_height = actors.len() as u32 * self.opts.pixels_per_actor;
+        let box_width = self.us_to_pixel(last_event_time - first_event_time);
+        let box_height = actors.len() as f64 * self.opts.pixels_per_actor;
 
         let mut document = Document::new()
-            .set("width", box_width + 2 * self.opts.side_margin as i64)
-            .set(
-                "height",
-                box_height as i64 + heading_height + self.opts.top_margin as i64,
-            );
+            .set("width", box_width + 2.0 * self.opts.side_margin)
+            .set("height", box_height + heading_height + self.opts.top_margin);
 
         let serialized = svg::node::Comment::new(serde_json::to_string(&(self, &events))?);
         document = document.add(serialized);
 
-        let defs = Svg::Definitions::new().add(Svg::Style::new(
-            "
-        rect.span      { opacity: 0.7; }
-        g.actor:hover rect { opacity: 1.0; }
-        path           { stroke: rgb(64,64,64); stroke-width: 1; }
-        path.subline   { stroke: rgb(224,224,224); stroke-width: 0.7; }
-        text           { font-family: Verdana, Helvetica; font-size: 14px; }
-        text.left      { font-family: Verdana, Helvetica; font-size: 14px; text-anchor: start; }
-        text.right     { font-family: Verdana, Helvetica; font-size: 14px; text-anchor: end; }
-        text.label     { font-size: 10px; }",
-        ));
-        document = document.add(defs);
+        document = self.render_css(document)?;
+        document = self.render_heading(document)?;
 
-        let first_bar = first_event_time - (first_event_time % self.opts.us_per_line as i64);
-        let last_bar = last_event_time + (last_event_time % self.opts.us_per_line as i64);
-
-        let start_x = self.opts.side_margin as i64
+        let start_x = self.opts.side_margin
             + if first_event_time < 0 {
-                -(first_event_time / self.opts.us_per_pixel as i64)
+                -self.us_to_pixel(first_event_time)
             } else {
-                0
+                0.0
             };
 
-        document = self.render_heading(document)?;
         let mut g = Svg::Group::new().set(
             "transform",
             format!("translate({start_x}, {heading_height})"),
         );
+        g = self.render_lines(g, first_event_time, last_event_time, box_height)?;
 
-        let step = self.opts.us_per_line as usize / self.opts.sublines as usize;
-        for x in (first_bar..=last_bar).step_by(step) {
-            let scaled_x = self.us_to_pixel(x);
-
-            let data = Data::new()
-                .move_to((scaled_x, 0))
-                .line_by((0, box_height))
-                .close();
-
-            let mut path = Svg::Path::new().set("d", data);
-
-            if x.unsigned_abs() % self.opts.us_per_line == 0 {
-                let text = Svg::Text::new(self.render_line_time(x))
-                    .set("class", "label")
-                    .set("x", scaled_x)
-                    .set("y", -5);
-                g = g.add(text);
-            } else {
-                path = path.set("class", "subline");
-            }
-
-            g = g.add(path);
-        }
-
-        let mut y = 0;
+        let mut y = 0.0;
         for (actor, _) in actors.into_iter() {
             g = self
-                .render_actor(g, y, box_width, &events, actor)
+                .render_actor(
+                    g,
+                    y,
+                    box_width,
+                    self.us_to_pixel(first_event_time),
+                    &events,
+                    actor,
+                )
                 .with_context(|| "Failed to render actor events")?;
 
             y += self.opts.pixels_per_actor;
