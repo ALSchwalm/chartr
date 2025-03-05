@@ -1,4 +1,4 @@
-use analyzr_core::{event, load, render};
+use chartr_core::{event, load, render};
 use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 
