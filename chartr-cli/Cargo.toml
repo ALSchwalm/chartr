@@ -6,3 +6,7 @@ edition = "2021"
 [dependencies]
 chartr-core = { path = "../chartr-core" }
 clap = { version = "4.5.31", features = ["derive"] }
+
+[[bin]]
+name = "chartr"
+path = "src/main.rs"

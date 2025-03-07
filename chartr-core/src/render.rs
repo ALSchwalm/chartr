@@ -105,6 +105,8 @@ impl Renderer {
     ) -> Result<Svg::Group> {
         let mut g = Svg::Group::new().set("class", "actor");
 
+        let tooltip_prefix = events.get_actor(&actor).tooltip.clone();
+
         let mut actor_start: Option<i64> = None;
         for (i, event) in events
             .events_for(&actor)
@@ -143,6 +145,15 @@ impl Renderer {
                 attrs.insert(key, format!("{value} {current}").into());
             }
 
+            if let Some(tip) = event
+                .tooltip
+                .as_ref()
+                .map(|tip| tooltip_prefix.clone().unwrap_or_default() + tip)
+            {
+                let tooltip = Svg::Title::new(tip);
+                state = state.add(tooltip);
+            }
+
             g = g.add(state);
         }
 
@@ -177,8 +188,9 @@ impl Renderer {
         last_event_time: i64,
         box_height: f64,
     ) -> Result<Svg::Group> {
-        let first_bar = first_event_time - (first_event_time % self.opts.us_per_line as i64) -
-            self.opts.us_per_line as i64;
+        let first_bar = first_event_time
+            - (first_event_time % self.opts.us_per_line as i64)
+            - self.opts.us_per_line as i64;
         let last_bar = last_event_time + (last_event_time % self.opts.us_per_line as i64);
 
         let step = self.opts.us_per_line as usize / self.opts.sublines as usize;
@@ -215,8 +227,10 @@ impl Renderer {
     fn render_css(&self, document: Document) -> Result<Document> {
         let defs = Svg::Definitions::new().add(Svg::Style::new(
             "
-        rect.span      { opacity: 0.7; }
+        rect.span          { opacity: 0.7; }
+        rect.span:hover    { outline: 1px solid black; }
         g.actor:hover rect { opacity: 1.0; }
+        g.actor text   { pointer-events: none; }
         path           { stroke: rgb(64,64,64); stroke-width: 1; }
         path.subline   { stroke: rgb(224,224,224); stroke-width: 0.7; }
         text           { font-family: Verdana, Helvetica; font-size: 14px; }

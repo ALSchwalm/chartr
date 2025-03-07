@@ -13,6 +13,7 @@ pub struct Event {
     pub fields: BTreeMap<String, String>,
     pub kind: EventKind,
     pub value: String,
+    pub tooltip: Option<String>
 }
 
 impl Event {
@@ -47,12 +48,14 @@ impl PartialOrd for Event {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Actor {
     pub identity: String,
+    pub tooltip: Option<String>
 }
 
 impl Actor {
     pub fn new(identity: impl AsRef<str>) -> Self {
         Self {
             identity: identity.as_ref().to_owned(),
+            tooltip: None
         }
     }
 }

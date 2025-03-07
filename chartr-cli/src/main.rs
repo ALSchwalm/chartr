@@ -28,6 +28,9 @@ struct CreateArgs {
 #[derive(Args, Clone, Debug)]
 struct AddActorArgs {
     identity: String,
+
+    #[arg(short, long, allow_hyphen_values = true)]
+    tooltip: Option<String>,
 }
 
 #[derive(Args, Clone, Debug)]
@@ -41,6 +44,9 @@ struct AddEventArgs {
 
     #[arg(short, long)]
     color: Option<String>,
+
+    #[arg(short, long, allow_hyphen_values = true)]
+    tooltip: Option<String>,
 }
 
 fn main() {
@@ -61,7 +67,10 @@ fn main() {
         Command::AddActor(args) => {
             let (r, mut events) = load(&cli.path).unwrap();
             events
-                .register_actor(event::Actor::new(args.identity))
+                .register_actor(event::Actor {
+                    identity: args.identity,
+                    tooltip: args.tooltip
+                })
                 .unwrap();
             r.render(cli.path, events).unwrap();
         }
@@ -89,6 +98,7 @@ fn main() {
                 fields,
                 value: "".into(),
                 kind,
+                tooltip: args.tooltip
             };
 
             events.add_event(&args.actor, e).unwrap();

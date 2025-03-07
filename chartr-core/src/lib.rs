@@ -48,9 +48,10 @@ mod tests {
                     fields: BTreeMap::from([("fill".into(), "#AB7C94".into())]),
                     kind: EventKind::Span(
                         Duration::from_millis(3500).as_micros() as i64,
-                        Duration::from_millis(750).as_micros() as u32,
+                        Some(Duration::from_millis(750).as_micros() as u32),
                     ),
                     value: "start1".into(),
+                    tooltip: None
                 },
             )
             .unwrap();
@@ -62,9 +63,10 @@ mod tests {
                     fields: BTreeMap::from([("fill".into(), "#AB7C94".into())]),
                     kind: EventKind::Span(
                         Duration::from_millis(1500).as_micros() as i64,
-                        Duration::from_millis(750).as_micros() as u32,
+                        Some(Duration::from_millis(750).as_micros() as u32),
                     ),
                     value: "other1".into(),
+                    tooltip: None
                 },
             )
             .unwrap();
@@ -76,9 +78,10 @@ mod tests {
                     fields: BTreeMap::from([("fill".into(), "#AB7C94".into())]),
                     kind: EventKind::Span(
                         -(Duration::from_millis(5000).as_micros() as i64),
-                        Duration::from_millis(2000).as_micros() as u32,
+                        Some(Duration::from_millis(2000).as_micros() as u32),
                     ),
                     value: "start2".into(),
+                    tooltip: None
                 },
             )
             .unwrap();
