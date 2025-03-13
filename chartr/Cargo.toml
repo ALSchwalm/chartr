@@ -1,6 +1,7 @@
 [package]
 name = "chartr"
 version = "0.1.0"
+description = "A library and cli for working with charts"
 repository.workspace = true
 license.workspace = true
 edition.workspace = true
