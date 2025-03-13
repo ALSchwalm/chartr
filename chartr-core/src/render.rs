@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::hash::Hash;
 use std::{path::Path, time::Duration};
 use svg::node::element as Svg;
 use svg::node::element::path::Data;
@@ -8,6 +9,41 @@ use svg::Document;
 use crate::event::{ActorId, EventKind, EventStore};
 
 const APPROX_FONT_HEIGHT: f64 = 15.0;
+
+// The built in Svg::Script type does escaping that breaks non trivial scripts
+// so make our own that just renders it plainly
+#[derive(Clone, Debug)]
+struct ScriptComment {
+    contents: String,
+}
+
+impl ScriptComment {
+    fn new(contents: impl AsRef<str>) -> Self {
+        Self {
+            contents: contents.as_ref().to_owned(),
+        }
+    }
+}
+
+impl svg::node::NodeDefaultHash for ScriptComment {
+    fn default_hash(&self, state: &mut std::collections::hash_map::DefaultHasher) {
+        self.contents.hash(state);
+    }
+}
+
+impl std::fmt::Display for ScriptComment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<script>")
+            .and_then(|_| write!(f, "<![CDATA[{}]]>", self.contents))
+            .and_then(|_| write!(f, "</script>"))
+    }
+}
+
+impl svg::Node for ScriptComment {
+    fn get_name(&self) -> &'static str {
+        "script"
+    }
+}
 
 #[derive(Deserialize, Serialize)]
 struct RenderOpts {
@@ -225,20 +261,19 @@ impl Renderer {
     }
 
     fn render_css(&self, document: Document) -> Result<Document> {
-        let defs = Svg::Definitions::new().add(Svg::Style::new(
-            "
-        rect.span          { opacity: 0.7; }
-        rect.span:hover    { outline: 1px solid black; }
-        g.actor:hover rect { opacity: 1.0; }
-        g.actor text   { pointer-events: none; }
-        path           { stroke: rgb(64,64,64); stroke-width: 1; }
-        path.subline   { stroke: rgb(224,224,224); stroke-width: 0.7; }
-        text           { font-family: Verdana, Helvetica; font-size: 14px; }
-        text.left      { font-family: Verdana, Helvetica; font-size: 14px; text-anchor: start; }
-        text.right     { font-family: Verdana, Helvetica; font-size: 14px; text-anchor: end; }
-        text.label     { font-size: 10px; }",
-        ));
+        let defs = Svg::Definitions::new().add(Svg::Style::new(include_str!("assets/style.css")));
         Ok(document.add(defs))
+    }
+
+    pub fn render_script(&self, document: Document) -> Result<Document> {
+        let script = include_str!("assets/script.js")
+            .replace("__LEFT_OFFSET__", &self.opts.side_margin.to_string())
+            .replace("__US_PER_PIXEL__", &self.opts.us_per_pixel.to_string())
+            .replace(
+                "__HEADING_HEIGHT__",
+                &self.calculate_heading_height().to_string(),
+            );
+        Ok(document.add(ScriptComment::new(script)))
     }
 
     pub fn render(&self, path: impl AsRef<Path>, events: EventStore) -> Result<()> {
@@ -282,6 +317,7 @@ impl Renderer {
         let serialized = svg::node::Comment::new(serde_json::to_string(&(self, &events))?);
         document = document.add(serialized);
 
+        document = self.render_script(document)?;
         document = self.render_css(document)?;
         document = self.render_heading(document)?;
 
@@ -314,7 +350,15 @@ impl Renderer {
             y += self.opts.pixels_per_actor;
         }
 
-        document = document.add(g);
+        document = document
+            .add(g)
+            .add(
+                Svg::Rectangle::new()
+                    .set("id", "indicator")
+                    .set("width", 1.0)
+                    .set("height", box_height),
+            )
+            .add(Svg::Text::new("").set("id", "indicator-text"));
 
         svg::save(path, &document).with_context(|| "Failed to save svg")
     }

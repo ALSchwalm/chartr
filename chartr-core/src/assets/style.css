@@ -1,0 +1,11 @@
+rect.span          { opacity: 0.7; }
+rect.span:hover    { outline: 1px solid black; }
+g.actor:hover rect { opacity: 1.0; }
+g.actor text   { pointer-events: none; }
+#indicator     { pointer-events: none; }
+path           { stroke: rgb(64,64,64); stroke-width: 1; }
+path.subline   { stroke: rgb(224,224,224); stroke-width: 0.7; }
+text           { font-family: Verdana, Helvetica; font-size: 14px; }
+text.left      { font-family: Verdana, Helvetica; font-size: 14px; text-anchor: start; }
+text.right     { font-family: Verdana, Helvetica; font-size: 14px; text-anchor: end; }
+text.label     { font-size: 10px; }
