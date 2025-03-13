@@ -1,14 +1,15 @@
 [package]
-name = "chartr-cli"
-version.workspace = true
+name = "chartr"
+version = "0.1.0"
 repository.workspace = true
 license.workspace = true
 edition.workspace = true
 
-
 [dependencies]
 chartr-core = { path = "../chartr-core", version = "0.1.0" }
 clap = { version = "4.5.31", features = ["derive"] }
+
+[lib]
 
 [[bin]]
 name = "chartr"

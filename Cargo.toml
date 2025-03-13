@@ -1,10 +1,10 @@
 [workspace]
 resolver = "2"
-members = ["chartr-core", "chartr-cli"]
+members = ["chartr-core", "chartr"]
 
 [workspace.package]
 license = "MIT"
 edition = "2021"
-version = "0.1.0"
+
 repository = "https://github.com/ALSchwalm/chartr"
 readme = "README.md"
